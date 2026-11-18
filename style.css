@@ -48,15 +48,15 @@ body.ceu-chuva {
   overflow: hidden;
 }
 
-/* Barra de informações (Figma: Frame 4) */
+/* Tópicos (Figma desktop 13:224): um por linha, alinhados à esquerda, a 50px do canto */
 .info {
   position: absolute;
-  top: 43px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 50px;
+  left: 50px;
   z-index: 2;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 24px;
   list-style: none;
   white-space: nowrap;
@@ -76,7 +76,7 @@ body.ceu-chuva {
 .sigla {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 53.23%; /* centro da rosa em 511/960 (Figma) */
   transform: translate(-50%, -50%);
   z-index: 0;
   color: #fcfcfc;
@@ -92,7 +92,7 @@ body.ceu-chuva {
 .seta {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 53.23%; /* centro da rosa em 511/960 (Figma) */
   z-index: 1;
   height: 66.25vh;
   height: 66.25dvh;
@@ -171,13 +171,18 @@ body.carregando .interface { opacity: 0; }
 body.carregando .seta { transition: none; }
 
 /* Telas estreitas: a barra quebra em duas linhas */
+/* Celular (Figma: iPhone 16 - 1, 393x852): um tópico por linha, alinhados à esquerda */
 @media (max-width: 760px) {
   .info {
-    top: 24px;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px 20px;
-    width: calc(100% - 32px);
+    top: 40px;
+    left: 40px;
   }
-  .info-item { font-size: 18px; }
+
+  /* Rosa mais baixa e menor: centro em 503/852 da altura, seta com 328,6/852 */
+  .sigla { top: 59.06%; }
+  .seta {
+    top: 59.06%;
+    height: 38.57vh;
+    height: 38.57dvh;
+  }
 }
