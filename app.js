@@ -105,7 +105,8 @@ async function buscarPrevisao() {
     wind_speed_unit: 'kmh',
     timezone: 'America/Sao_Paulo',
   });
-  const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+  // cache: 'no-store' → o navegador nunca reaproveita uma resposta antiga da previsão
+  const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
   if (!resp.ok) throw new Error(`Open-Meteo respondeu ${resp.status}`);
   const dados = await resp.json();
   const c = dados.current;
@@ -194,7 +195,10 @@ function mostrarErro() {
   document.getElementById('texto-condicao').textContent = 'TENTE MAIS TARDE';
 }
 
+let ultimaAtualizacao = 0;
+
 async function atualizar() {
+  ultimaAtualizacao = Date.now();
   const demo = lerDemo();
   if (demo) { mostrar(demo); return; }
   try {
@@ -235,6 +239,23 @@ async function iniciar() {
   setTimeout(() => abertura.remove(), 700);
 }
 
+/**
+ * Atualização a cada 15 minutos.
+ * Em vez de confiar só num timer de 15 min (que o navegador congela quando a aba fica
+ * em segundo plano ou o celular bloqueia), verificamos a cada 30 s se já passaram 15 min
+ * desde a última busca, e também assim que a pessoa volta para a aba.
+ */
+const INTERVALO_MS = ATUALIZAR_A_CADA_MIN * 60 * 1000;
+
+function atualizarSeVencido() {
+  if (document.visibilityState === 'visible' && Date.now() - ultimaAtualizacao >= INTERVALO_MS) {
+    atualizar();
+  }
+}
+
 window.addEventListener('resize', ajustarSigla);
 iniciar();
-setInterval(atualizar, ATUALIZAR_A_CADA_MIN * 60 * 1000);
+setInterval(atualizarSeVencido, 30 * 1000);
+document.addEventListener('visibilitychange', atualizarSeVencido);
+// Voltar para a página pelo botão "voltar" pode restaurar uma cópia antiga dela: busca de novo
+window.addEventListener('pageshow', (e) => { if (e.persisted) atualizar(); });
