@@ -168,7 +168,6 @@ body.ceu-chuva {
 /* A interface aparece com fade in quando a abertura sai */
 body.carregando .interface { opacity: 0; }
 .interface { transition: opacity 0.6s ease; }
-body.carregando .seta { transition: none; }
 
 /* Telas estreitas: a barra quebra em duas linhas */
 /* Celular (Figma: iPhone 16 - 1, 393x852): um tópico por linha, alinhados à esquerda */

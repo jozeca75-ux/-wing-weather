@@ -136,6 +136,10 @@ function lerDemo() {
 
 let anguloAtual = 0;
 
+function girarSeta() {
+  document.getElementById('seta').style.setProperty('--angulo', `${anguloAtual}deg`);
+}
+
 function mostrar(p) {
   const codigo = codigoEfetivo(p);
 
@@ -160,7 +164,8 @@ function mostrar(p) {
   const alvo = i * 22.5;
   let delta = ((alvo - anguloAtual) % 360 + 540) % 360 - 180;
   anguloAtual += delta;
-  document.getElementById('seta').style.setProperty('--angulo', `${anguloAtual}deg`);
+  // Na abertura a seta fica em 0° (N); ela gira para a direção quando a interface aparece
+  if (!document.body.classList.contains('carregando')) girarSeta();
 
   const sigla = document.getElementById('sigla');
   sigla.textContent = SIGLAS[i];
@@ -172,7 +177,9 @@ function ajustarSigla() {
   const sigla = document.getElementById('sigla');
   const alturaTela = window.innerHeight;
   const larguraTela = window.innerWidth;
-  let tamanho = alturaTela * (1000 / 960);
+  // Desktop (Figma 1440x960): fonte 1000px; celular (Figma 393x852): fonte 516,6px
+  const celular = window.matchMedia('(max-width: 760px)').matches;
+  let tamanho = alturaTela * (celular ? 516.6 / 852 : 1000 / 960);
   sigla.style.fontSize = `${tamanho}px`;
   const largura = sigla.getBoundingClientRect().width;
   const limite = larguraTela * 0.92;
@@ -204,6 +211,7 @@ async function atualizar() {
  * terminando sempre no fim de um ciclo; depois a interface surge com fade in.
  */
 const CICLO_ABERTURA_MS = 1600;
+const ATRASO_SETA_MS = 300; // espera um pouco do fade in antes de girar a seta
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function iniciar() {
@@ -218,6 +226,8 @@ async function iniciar() {
   const abertura = document.getElementById('abertura');
   abertura.classList.add('saindo');
   document.body.classList.remove('carregando');
+  // A seta começa em 0° e gira para a direção do vento logo depois que a interface começa a aparecer
+  setTimeout(girarSeta, ATRASO_SETA_MS);
   // Remove a abertura depois do fade (o tempo garante a remoção mesmo se o CSS não carregar)
   setTimeout(() => abertura.remove(), 700);
 }
