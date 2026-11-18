@@ -67,14 +67,14 @@ function categoriaCeu(codigo) {
 
 /**
  * Nível do céu (código já corrigido):
- * ótimo = ensolarado/nuvem com sol/nublado; bom = chuva fraca;
- * ruim = neblina, chuva moderada/forte; péssimo = trovoada.
+ * ótimo = ensolarado, nuvem com sol; bom = nublado;
+ * ruim = chuva (fraca, moderada ou forte) e neblina; péssimo = trovoada.
  */
 function nivelCeu(codigo) {
   if (codigo >= 95) return PESSIMO;
-  if (codigo <= 3) return OTIMO;
-  if ([51, 53, 55, 56, 57, 61, 80].includes(codigo)) return BOM;
-  return RUIM; // 45/48 neblina, 63-67, 81-82, neve/granizo
+  if (codigo <= 2) return OTIMO;
+  if (codigo === 3) return BOM;
+  return RUIM; // 45/48 neblina, chuva 61-82, neve/granizo
 }
 
 /**
