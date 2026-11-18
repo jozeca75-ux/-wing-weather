@@ -1,0 +1,116 @@
+/* Fonte Jersey 15 (SIL Open Font License — ver fonts/OFL.txt) */
+@font-face {
+  font-family: 'Jersey 15';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/jersey-15-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Jersey 15';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/jersey-15-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: 'Jersey 15', sans-serif;
+  color: #413838;
+  overflow: hidden;
+  background-color: #c1c0c0;
+  transition: background 0.6s ease;
+}
+
+/* Fundos de acordo com o céu (Figma: gradiente_*) */
+body.ceu-ensolarado { background-image: linear-gradient(to bottom, #c1c0c0, #fff04f); }
+body.ceu-nuvem-sol  { background-image: linear-gradient(to bottom, #c1c0c0, #5ebbe6); }
+body.ceu-nublado    { background-image: linear-gradient(to bottom, #c1c0c0, #959595); }
+body.ceu-chuva {
+  background-image:
+    url("assets/chuva-padrao.svg"),
+    linear-gradient(to bottom, #c1c0c0, #3e3e3e);
+  background-repeat: repeat, no-repeat;
+  background-size: 40.306px 38.5px, 100% 100%;
+}
+
+.interface {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Barra de informações (Figma: Frame 4) */
+.info {
+  position: absolute;
+  top: 43px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  line-height: normal;
+}
+
+.info-item img { width: 24px; height: 24px; flex-shrink: 0; display: block; }
+
+/* Sigla da direção (Figma: texto "N", 1000px, #fcfcfc) */
+.sigla {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  color: #fcfcfc;
+  font-size: 1000px; /* ajustado pelo app.js ao tamanho da tela */
+  line-height: 1;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Seta (Figma: Seta 84x636 em tela 1440x960) */
+.seta {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  height: 66.25vh;
+  height: 66.25dvh;
+  max-height: 92vw; /* em telas estreitas a seta não sai da tela quando aponta para E/O */
+  width: auto;
+  transform: translate(-50%, -50%) rotate(var(--angulo, 0deg));
+  transform-origin: 50% 50%;
+  transition: transform 1s ease;
+}
+
+/* Telas estreitas: a barra quebra em duas linhas */
+@media (max-width: 760px) {
+  .info {
+    top: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 20px;
+    width: calc(100% - 32px);
+  }
+  .info-item { font-size: 18px; }
+}
