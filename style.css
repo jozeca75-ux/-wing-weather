@@ -3,7 +3,7 @@
   font-family: 'Jersey 15';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: block;
   src: url('fonts/jersey-15-latin-400-normal.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -11,7 +11,7 @@
   font-family: 'Jersey 15';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: block;
   src: url('fonts/jersey-15-latin-ext-400-normal.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
@@ -102,6 +102,73 @@ body.ceu-chuva {
   transform-origin: 50% 50%;
   transition: transform 1s ease;
 }
+
+/* ---------- Tela de abertura (Figma: loading, 1440x960) ---------- */
+.abertura {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #c1c0c0;
+  transition: opacity 0.6s ease;
+}
+.abertura.saindo { opacity: 0; pointer-events: none; }
+.abertura.saindo .abertura-icones img { animation: none; opacity: 0; }
+
+.abertura-conteudo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.abertura-icones {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 32px; /* ícone (383–443) até WING (475) */
+}
+
+/* 4 ícones em sequência: cada um aparece e some em 400ms → ciclo de 1600ms */
+.abertura-icones img {
+  position: absolute;
+  inset: 0;
+  width: 60px;
+  height: 60px;
+  opacity: 0;
+  animation: piscar-icone 1600ms ease-in-out infinite;
+}
+.abertura-icones img:nth-child(2) { animation-delay: 400ms; }
+.abertura-icones img:nth-child(3) { animation-delay: 800ms; }
+.abertura-icones img:nth-child(4) { animation-delay: 1200ms; }
+
+@keyframes piscar-icone {
+  0%    { opacity: 0; }
+  12.5% { opacity: 1; }
+  25%   { opacity: 0; }
+  100%  { opacity: 0; }
+}
+
+.abertura-titulo {
+  font-size: 80px;
+  line-height: 1;
+  color: #413838;
+  text-align: center;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+}
+.abertura-titulo + .abertura-titulo { margin-top: 14px; } /* WING (519) até WEATHER (533) */
+
+@media (prefers-reduced-motion: reduce) {
+  .abertura-icones img { animation: none; }
+  .abertura-icones img:first-child { opacity: 1; }
+}
+
+/* A interface aparece com fade in quando a abertura sai */
+body.carregando .interface { opacity: 0; }
+.interface { transition: opacity 0.6s ease; }
+body.carregando .seta { transition: none; }
 
 /* Telas estreitas: a barra quebra em duas linhas */
 @media (max-width: 760px) {

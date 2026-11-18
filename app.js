@@ -141,7 +141,8 @@ function mostrar(p) {
 
   // Céu
   const ceu = CEU[categoriaCeu(codigo)];
-  document.body.className = ceu.classe;
+  for (const c of Object.values(CEU)) document.body.classList.remove(c.classe);
+  document.body.classList.add(ceu.classe);
   document.getElementById('icone-ceu').src = ceu.icone;
   document.getElementById('texto-ceu').textContent = ceu.texto;
 
@@ -197,7 +198,29 @@ async function atualizar() {
   }
 }
 
+/**
+ * Abertura: os ícones do céu aparecem em sequência (ciclo de 1600ms).
+ * A página só aparece depois de pelo menos um ciclo completo E com os dados prontos,
+ * terminando sempre no fim de um ciclo; depois a interface surge com fade in.
+ */
+const CICLO_ABERTURA_MS = 1600;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function iniciar() {
+  const inicio = performance.now();
+  await Promise.all([atualizar(), document.fonts?.ready]);
+  ajustarSigla();
+
+  const decorrido = performance.now() - inicio;
+  const fim = Math.max(1, Math.ceil(decorrido / CICLO_ABERTURA_MS)) * CICLO_ABERTURA_MS;
+  await esperar(fim - decorrido);
+
+  const abertura = document.getElementById('abertura');
+  abertura.classList.add('saindo');
+  document.body.classList.remove('carregando');
+  abertura.addEventListener('transitionend', () => abertura.remove(), { once: true });
+}
+
 window.addEventListener('resize', ajustarSigla);
-document.fonts?.ready.then(ajustarSigla);
-atualizar();
+iniciar();
 setInterval(atualizar, ATUALIZAR_A_CADA_MIN * 60 * 1000);
