@@ -6,10 +6,17 @@ const LOCAL = { latitude: -28.1542, longitude: -48.6514 };
 const ATUALIZAR_A_CADA_MIN = 15; // checa a condição atual a cada 15 minutos
 
 // Limites (em nós) — praticante experiente
-const VENTO_MIN_KT = 12;
-const VENTO_MAX_KT = 30;
-const RAJADA_MAX_KT = 35;
 const KMH_POR_NO = 1.852;
+const RAJADA_MAX_KT = 35;
+
+// 4 níveis de condição (0 = melhor, 3 = pior)
+const NIVEIS = [
+  { texto: 'ÓTIMO PARA VELEJAR',   icone: 'assets/bom.svg' },
+  { texto: 'BOM PARA VELEJAR',     icone: 'assets/bom.svg' },
+  { texto: 'RUIM PARA VELEJAR',    icone: 'assets/ruim.svg' },
+  { texto: 'PÉSSIMO PARA VELEJAR', icone: 'assets/ruim.svg' },
+];
+const OTIMO = 0, BOM = 1, RUIM = 2, PESSIMO = 3;
 
 // Rosa dos ventos de 16 pontos (siglas em português)
 const SIGLAS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
@@ -58,17 +65,31 @@ function categoriaCeu(codigo) {
   return 'chuva'; // garoa, chuva, pancadas, neve/granizo, trovoada
 }
 
-/** Céu bom para velejar? (chuva fraca é aceitável; neblina, chuva forte e trovoada não) */
-function ceuBom(codigo) {
-  const bons = [0, 1, 2, 3, 51, 53, 55, 56, 57, 61, 80];
-  return bons.includes(codigo);
+/**
+ * Nível do céu (código já corrigido):
+ * ótimo = ensolarado/nuvem com sol/nublado; bom = chuva fraca;
+ * ruim = neblina, chuva moderada/forte; péssimo = trovoada.
+ */
+function nivelCeu(codigo) {
+  if (codigo >= 95) return PESSIMO;
+  if (codigo <= 3) return OTIMO;
+  if ([51, 53, 55, 56, 57, 61, 80].includes(codigo)) return BOM;
+  return RUIM; // 45/48 neblina, 63-67, 81-82, neve/granizo
 }
 
-/** Vento bom para velejar? (velocidades em km/h vindas da API) */
-function ventoBom(velocidadeKmh, rajadaKmh) {
+/**
+ * Nível do vento (velocidades em km/h vindas da API, faixas em nós):
+ * ótimo 15-22 kt; bom 12-15 ou 22-30 kt; ruim 8-12 kt;
+ * péssimo < 8 kt, > 30 kt ou rajada > 35 kt.
+ */
+function nivelVento(velocidadeKmh, rajadaKmh) {
   const kt = velocidadeKmh / KMH_POR_NO;
   const rajadaKt = rajadaKmh / KMH_POR_NO;
-  return kt >= VENTO_MIN_KT && kt <= VENTO_MAX_KT && rajadaKt <= RAJADA_MAX_KT;
+  if (rajadaKt > RAJADA_MAX_KT) return PESSIMO;
+  if (kt < 8 || kt > 30) return PESSIMO;
+  if (kt < 12) return RUIM;
+  if (kt >= 15 && kt <= 22) return OTIMO;
+  return BOM;
 }
 
 /** Graus (de onde o vento vem) -> índice 0..15 da rosa */
@@ -128,10 +149,10 @@ function mostrar(p) {
   document.getElementById('texto-velocidade').textContent =
     `VELOCIDADE= ${Math.round(p.velocidade)}km/h`;
 
-  // Bom ou ruim para velejar
-  const bom = ventoBom(p.velocidade, p.rajada) && ceuBom(codigo);
-  document.getElementById('icone-condicao').src = bom ? 'assets/bom.svg' : 'assets/ruim.svg';
-  document.getElementById('texto-condicao').textContent = bom ? 'BOM PARA VELEJAR' : 'RUIM PARA VELEJAR';
+  // Condição: vale o pior entre vento e céu
+  const nivel = NIVEIS[Math.max(nivelVento(p.velocidade, p.rajada), nivelCeu(codigo))];
+  document.getElementById('icone-condicao').src = nivel.icone;
+  document.getElementById('texto-condicao').textContent = nivel.texto;
 
   // Direção: seta gira para o ponto da rosa (0° = N) pelo caminho mais curto
   const i = indiceDirecao(p.direcao);
