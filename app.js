@@ -218,7 +218,8 @@ async function iniciar() {
   const abertura = document.getElementById('abertura');
   abertura.classList.add('saindo');
   document.body.classList.remove('carregando');
-  abertura.addEventListener('transitionend', () => abertura.remove(), { once: true });
+  // Remove a abertura depois do fade (o tempo garante a remoção mesmo se o CSS não carregar)
+  setTimeout(() => abertura.remove(), 700);
 }
 
 window.addEventListener('resize', ajustarSigla);
