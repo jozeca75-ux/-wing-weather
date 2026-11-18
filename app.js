@@ -3,7 +3,7 @@
  */
 
 const LOCAL = { latitude: -28.1542, longitude: -48.6514 };
-const ATUALIZAR_A_CADA_MIN = 15;
+const ATUALIZAR_A_CADA_MIN = 15; // checa a condição atual a cada 15 minutos
 
 // Limites (em nós) — praticante experiente
 const VENTO_MIN_KT = 12;
@@ -22,6 +22,27 @@ const CEU = {
   nublado:    { texto: 'NUBLADO',       icone: 'assets/cloud.svg',        classe: 'ceu-nublado' },
   chuva:      { texto: 'CHUVA',         icone: 'assets/rainy.svg',        classe: 'ceu-chuva' },
 };
+
+/** Chuva mínima (mm/h) para considerar que está chovendo de verdade */
+const CHUVA_MIN_MM = 0.1;
+
+/**
+ * Corrige o código do modelo: se ele diz garoa/chuva mas a chuva prevista é
+ * praticamente zero, usa a cobertura de nuvens para decidir o céu.
+ * Trovoada (95-99) é sempre mantida, por segurança.
+ */
+function codigoEfetivo(p) {
+  const c = p.codigo;
+  if (c >= 95) return c;
+  const ehChuva = c >= 51;
+  if (ehChuva && p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM) {
+    if (p.nuvens === undefined) return 3;
+    if (p.nuvens < 25) return 0;   // ensolarado
+    if (p.nuvens < 75) return 2;   // nuvem com sol
+    return 3;                      // nublado
+  }
+  return c;
+}
 
 /** Código WMO -> uma das 4 categorias de céu */
 function categoriaCeu(codigo) {
@@ -53,7 +74,7 @@ async function buscarPrevisao() {
   const params = new URLSearchParams({
     latitude: LOCAL.latitude,
     longitude: LOCAL.longitude,
-    current: 'wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code',
+    current: 'wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,precipitation,cloud_cover',
     wind_speed_unit: 'kmh',
     timezone: 'America/Sao_Paulo',
   });
@@ -61,11 +82,14 @@ async function buscarPrevisao() {
   if (!resp.ok) throw new Error(`Open-Meteo respondeu ${resp.status}`);
   const dados = await resp.json();
   const c = dados.current;
+  console.log('Open-Meteo (agora):', c);
   return {
     velocidade: c.wind_speed_10m,
     rajada: c.wind_gusts_10m,
     direcao: c.wind_direction_10m,
     codigo: c.weather_code,
+    precipitacao: c.precipitation,
+    nuvens: c.cloud_cover,
   };
 }
 
@@ -78,14 +102,18 @@ function lerDemo() {
     rajada: Number(q.get('raj') ?? q.get('vel') ?? 30),
     direcao: Number(q.get('dir') ?? 45),
     codigo: Number(q.get('cod') ?? 0),
+    precipitacao: q.has('chuva') ? Number(q.get('chuva')) : undefined,
+    nuvens: q.has('nuvens') ? Number(q.get('nuvens')) : undefined,
   };
 }
 
 let anguloAtual = 0;
 
 function mostrar(p) {
+  const codigo = codigoEfetivo(p);
+
   // Céu
-  const ceu = CEU[categoriaCeu(p.codigo)];
+  const ceu = CEU[categoriaCeu(codigo)];
   document.body.className = ceu.classe;
   document.getElementById('icone-ceu').src = ceu.icone;
   document.getElementById('texto-ceu').textContent = ceu.texto;
@@ -95,7 +123,7 @@ function mostrar(p) {
     `VELOCIDADE= ${Math.round(p.velocidade)}km/h`;
 
   // Bom ou ruim para velejar
-  const bom = ventoBom(p.velocidade, p.rajada) && ceuBom(p.codigo);
+  const bom = ventoBom(p.velocidade, p.rajada) && ceuBom(codigo);
   document.getElementById('icone-condicao').src = bom ? 'assets/bom.svg' : 'assets/ruim.svg';
   document.getElementById('texto-condicao').textContent = bom ? 'BOM PARA VELEJAR' : 'RUIM PARA VELEJAR';
 
