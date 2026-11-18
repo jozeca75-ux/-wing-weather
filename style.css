@@ -86,7 +86,10 @@ body.ceu-chuva {
   text-box-edge: cap alphabetic;
   white-space: nowrap;
   user-select: none;
+  transition: opacity 0.6s ease;
 }
+/* Na entrada, a sigla só aparece (fade in) depois que a seta para */
+body.sigla-oculta .sigla { opacity: 0; }
 
 /* Seta (Figma: Seta 84x636 em tela 1440x960) */
 .seta {

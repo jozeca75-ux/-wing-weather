@@ -212,6 +212,7 @@ async function atualizar() {
  */
 const CICLO_ABERTURA_MS = 1600;
 const ATRASO_SETA_MS = 300; // espera um pouco do fade in antes de girar a seta
+const GIRO_SETA_MS = 1000;  // mesma duração da transição da seta no style.css
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function iniciar() {
@@ -228,6 +229,8 @@ async function iniciar() {
   document.body.classList.remove('carregando');
   // A seta começa em 0° e gira para a direção do vento logo depois que a interface começa a aparecer
   setTimeout(girarSeta, ATRASO_SETA_MS);
+  // Quando a seta para (giro de 1s), a sigla aparece com fade in
+  setTimeout(() => document.body.classList.remove('sigla-oculta'), ATRASO_SETA_MS + GIRO_SETA_MS);
   // Remove a abertura depois do fade (o tempo garante a remoção mesmo se o CSS não carregar)
   setTimeout(() => abertura.remove(), 700);
 }
