@@ -23,23 +23,29 @@ const CEU = {
   chuva:      { texto: 'CHUVA',         icone: 'assets/rainy.svg',        classe: 'ceu-chuva' },
 };
 
-/** Chuva mínima (mm/h) para considerar que está chovendo de verdade */
-const CHUVA_MIN_MM = 0.1;
+/** Chuva mínima (mm) para considerar que está chovendo de verdade */
+const CHUVA_MIN_MM = 0.5;
+
+/** Céu pela cobertura de nuvens (usado quando não há chuva de verdade) */
+function codigoPorNuvens(nuvens) {
+  if (nuvens === undefined) return 3;
+  if (nuvens < 25) return 0;   // ensolarado
+  if (nuvens < 75) return 2;   // nuvem com sol
+  return 3;                    // nublado
+}
 
 /**
- * Corrige o código do modelo: se ele diz garoa/chuva mas a chuva prevista é
- * praticamente zero, usa a cobertura de nuvens para decidir o céu.
- * Trovoada (95-99) é sempre mantida, por segurança.
+ * Corrige o código do modelo:
+ * - garoa (51-57) nunca vira CHUVA: o céu segue a cobertura de nuvens;
+ * - chuva (61-82) só vira CHUVA com 0,5 mm ou mais previstos;
+ * - trovoada (95-99) é sempre mantida, por segurança.
  */
 function codigoEfetivo(p) {
   const c = p.codigo;
   if (c >= 95) return c;
-  const ehChuva = c >= 51;
-  if (ehChuva && p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM) {
-    if (p.nuvens === undefined) return 3;
-    if (p.nuvens < 25) return 0;   // ensolarado
-    if (p.nuvens < 75) return 2;   // nuvem com sol
-    return 3;                      // nublado
+  if (c >= 51 && c <= 57) return codigoPorNuvens(p.nuvens);
+  if (c >= 61 && p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM) {
+    return codigoPorNuvens(p.nuvens);
   }
   return c;
 }
