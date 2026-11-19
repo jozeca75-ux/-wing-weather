@@ -33,28 +33,57 @@ const CEU = {
 /** Chuva mínima (mm) para considerar que está chovendo de verdade */
 const CHUVA_MIN_MM = 0.5;
 
-/** Céu pela cobertura de nuvens (usado quando não há chuva de verdade) */
-function codigoPorNuvens(nuvens) {
-  if (nuvens === undefined) return 3;
-  if (nuvens < 25) return 0;   // ensolarado
-  if (nuvens < 75) return 2;   // nuvem com sol
-  return 3;                    // nublado
+/* ---------- Céu observado por satélite (NOAA GOES-19, via Open-Meteo) ----------
+ * De dia, o satélite mede quanta luz do sol chega de fato à lagoa (a cada 10 min).
+ * Índice de claridade k = radiação que chega ao chão / radiação no topo da atmosfera.
+ *   k alto  → sol aberto; k médio → nuvens com sol; k baixo → céu fechado.
+ * Limites iniciais (ajustáveis com observações no local):
+ */
+const K_ENSOLARADO = 0.62;      // k ≥ 0,62 → ENSOLARADO
+const K_NUBLADO = 0.30;         // k < 0,30 → NUBLADO (entre os dois → NUVEM COM SOL)
+const SOL_MIN_TOA = 150;        // W/m²; abaixo disso (noite ou sol muito baixo) usa a previsão
+const SAT_MAX_ATRASO_MIN = 90;  // dado de satélite mais velho que isso é ignorado
+
+function codigoPorSatelite(sat) {
+  if (!sat || sat.toa < SOL_MIN_TOA || sat.idadeMin > SAT_MAX_ATRASO_MIN) return null;
+  const k = sat.ghi / sat.toa;
+  if (k >= K_ENSOLARADO) return 0; // ensolarado
+  if (k >= K_NUBLADO) return 2;    // nuvem com sol
+  return 3;                        // nublado
 }
 
 /**
- * Corrige o código do modelo:
- * - garoa (51-57) nunca vira CHUVA: o céu segue a cobertura de nuvens;
+ * Céu pela previsão de nuvens (noite ou sem satélite).
+ * Usa só as nuvens baixas e médias: nuvens altas e finas deixam o sol aparecer.
+ * Nublado = céu praticamente todo coberto (≥ 88%, o "8/8" da meteorologia).
+ */
+function codigoPorNuvens(p) {
+  const opacas = (p.nuvensBaixas !== undefined || p.nuvensMedias !== undefined)
+    ? Math.max(p.nuvensBaixas ?? 0, p.nuvensMedias ?? 0)
+    : p.nuvens;
+  if (opacas === undefined) return 2;
+  if (opacas < 25) return 0;   // ensolarado
+  if (opacas < 88) return 2;   // nuvem com sol
+  return 3;                    // nublado
+}
+
+/** Céu quando não está chovendo: satélite primeiro, previsão como reserva */
+function ceuSemChuva(p) {
+  return codigoPorSatelite(p.satelite) ?? codigoPorNuvens(p);
+}
+
+/**
+ * Código final do céu:
+ * - trovoada (95-99) e neblina (45/48) vêm da previsão e são mantidas;
  * - chuva (61-82) só vira CHUVA com 0,5 mm ou mais previstos;
- * - trovoada (95-99) é sempre mantida, por segurança.
+ * - garoa (51-57) e céu sem chuva (0-3): satélite (de dia) ou nuvens baixas/médias (à noite).
  */
 function codigoEfetivo(p) {
   const c = p.codigo;
   if (c >= 95) return c;
-  if (c >= 51 && c <= 57) return codigoPorNuvens(p.nuvens);
-  if (c >= 61 && p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM) {
-    return codigoPorNuvens(p.nuvens);
-  }
-  return c;
+  if (c === 45 || c === 48) return c;
+  if (c >= 61 && !(p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM)) return c;
+  return ceuSemChuva(p);
 }
 
 /** Código WMO -> uma das 4 categorias de céu */
@@ -101,7 +130,8 @@ async function buscarPrevisao() {
   const params = new URLSearchParams({
     latitude: LOCAL.latitude,
     longitude: LOCAL.longitude,
-    current: 'wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,precipitation,cloud_cover',
+    current: 'wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,precipitation,' +
+             'cloud_cover,cloud_cover_low,cloud_cover_mid',
     wind_speed_unit: 'kmh',
     timezone: 'America/Sao_Paulo',
   });
@@ -110,7 +140,7 @@ async function buscarPrevisao() {
   if (!resp.ok) throw new Error(`Open-Meteo respondeu ${resp.status}`);
   const dados = await resp.json();
   const c = dados.current;
-  console.log('Open-Meteo (agora):', c);
+  console.log('Open-Meteo previsão (agora):', c);
   return {
     velocidade: c.wind_speed_10m,
     rajada: c.wind_gusts_10m,
@@ -118,7 +148,51 @@ async function buscarPrevisao() {
     codigo: c.weather_code,
     precipitacao: c.precipitation,
     nuvens: c.cloud_cover,
+    nuvensBaixas: c.cloud_cover_low,
+    nuvensMedias: c.cloud_cover_mid,
   };
+}
+
+/**
+ * Última medição do satélite GOES-19 (radiação solar a cada 10 min, ~20 min de atraso).
+ * Retorna null se não houver dado; o site então usa só a previsão.
+ */
+async function buscarSatelite() {
+  try {
+    const params = new URLSearchParams({
+      latitude: LOCAL.latitude,
+      longitude: LOCAL.longitude,
+      hourly: 'shortwave_radiation,direct_radiation,terrestrial_radiation',
+      models: 'satellite_radiation_seamless',
+      temporal_resolution: 'native',
+      timeformat: 'unixtime',
+    });
+    const resp = await fetch(`https://satellite-api.open-meteo.com/v1/archive?${params}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`satélite respondeu ${resp.status}`);
+    const dados = await resp.json();
+    // a série pode vir como "hourly" ou "minutely_*": pega a que tiver os dados
+    const serie = Object.values(dados).find((v) => v && Array.isArray(v.time) && Array.isArray(v.shortwave_radiation));
+    if (!serie) return null;
+    const agora = Date.now() / 1000;
+    for (let i = serie.time.length - 1; i >= 0; i--) {
+      const ghi = serie.shortwave_radiation[i];
+      const toa = serie.terrestrial_radiation?.[i];
+      if (serie.time[i] <= agora && ghi != null && toa != null) {
+        const sat = { ghi, toa, direto: serie.direct_radiation?.[i], idadeMin: Math.round((agora - serie.time[i]) / 60) };
+        console.log('Satélite (última medição):', sat, 'k =', toa > 0 ? (ghi / toa).toFixed(2) : '-');
+        return sat;
+      }
+    }
+    return null;
+  } catch (e) {
+    console.warn('Satélite indisponível, usando só a previsão:', e);
+    return null;
+  }
+}
+
+async function buscarDados() {
+  const [previsao, satelite] = await Promise.all([buscarPrevisao(), buscarSatelite()]);
+  return { ...previsao, satelite };
 }
 
 /** Modo demonstração: ?demo&vel=25&raj=30&dir=45&cod=2 */
@@ -132,6 +206,10 @@ function lerDemo() {
     codigo: Number(q.get('cod') ?? 0),
     precipitacao: q.has('chuva') ? Number(q.get('chuva')) : undefined,
     nuvens: q.has('nuvens') ? Number(q.get('nuvens')) : undefined,
+    nuvensBaixas: q.has('baixas') ? Number(q.get('baixas')) : undefined,
+    nuvensMedias: q.has('medias') ? Number(q.get('medias')) : undefined,
+    // &k=0.5 simula a medição do satélite (índice de claridade)
+    satelite: q.has('k') ? { ghi: Number(q.get('k')) * 1000, toa: 1000, idadeMin: 20 } : null,
   };
 }
 
@@ -202,7 +280,7 @@ async function atualizar() {
   const demo = lerDemo();
   if (demo) { mostrar(demo); return; }
   try {
-    mostrar(await buscarPrevisao());
+    mostrar(await buscarDados());
   } catch (e) {
     console.error(e);
     mostrarErro();
