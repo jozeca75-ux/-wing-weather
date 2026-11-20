@@ -106,6 +106,19 @@ body.sigla-oculta .sigla { opacity: 0; }
   transition: transform 1s ease;
 }
 
+/* Créditos das fontes de dados (exigidos por Open-Meteo e RainViewer) */
+.creditos {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  z-index: 2;
+  font-size: 14px;
+  color: #413838;
+  opacity: 0.7;
+}
+.creditos a { color: inherit; }
+body.ceu-chuva .creditos { color: #fcfcfc; } /* legível sobre o fundo escuro de chuva */
+
 /* ---------- Tela de abertura (Figma: loading, 1440x960) ---------- */
 .abertura {
   position: fixed;

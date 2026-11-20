@@ -31,7 +31,8 @@ const CEU = {
 };
 
 /** Chuva mínima (mm) para considerar que está chovendo de verdade */
-const CHUVA_MIN_MM = 0.5;
+// A "condição atual" da Open-Meteo traz a chuva dos últimos 15 min: 0,3 mm ≈ 1,2 mm/h
+const CHUVA_MIN_MM = 0.3;
 
 /* ---------- Céu observado por satélite (NOAA GOES-19, via Open-Meteo) ----------
  * De dia, o satélite mede quanta luz do sol chega de fato à lagoa (a cada 10 min).
@@ -81,6 +82,8 @@ function ceuSemChuva(p) {
 function codigoEfetivo(p) {
   const c = p.codigo;
   if (c >= 95) return c;
+  // Radar (observação): chuva detectada sobre a lagoa → CHUVA, mesmo que a previsão não veja
+  if (p.radarDbz != null && p.radarDbz >= RADAR_CHUVA_DBZ) return 63;
   if (c === 45 || c === 48) return c;
   if (c >= 61 && !(p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM)) return c;
   return ceuSemChuva(p);
@@ -190,9 +193,92 @@ async function buscarSatelite() {
   }
 }
 
+/* ---------- Radar de chuva (RainViewer, observação a cada 10 min) ----------
+ * Lê o pixel do mapa de radar sobre a lagoa e converte a cor em refletividade (dBZ).
+ * ≥ 20 dBZ ≈ chuva fraca de verdade; o radar só ACRESCENTA chuva: se ele não vê nada,
+ * a decisão volta para a previsão (o radar pode ter falhas de cobertura).
+ */
+const RADAR_CHUVA_DBZ = 20;
+const RADAR_ZOOM = 7;              // zoom máximo do plano gratuito
+const RADAR_MAX_ATRASO_MIN = 40;   // imagem de radar mais velha que isso é ignorada
+const RADAR_RAIO_PX = 1;           // olha um quadrado 3x3 px (~3,5 km) em volta da lagoa
+
+// Tabela de cores "Universal Blue" (esquema 2) do RainViewer: [dBZ, r, g, b, a]
+const RADAR_CORES = (() => {
+  const hex = {
+    '-10': 'cfffff00', '-9': 'ceffff0c', '-8': 'cdffff19', '-7': 'ccffff26', '-6': 'cbffff33', '-5': 'cbffff3f',
+    '-4': 'caffff4c', '-3': 'c9ffff59', '-2': 'c8ffff66', '-1': 'c7ffff72', 0: 'c7ffff7f', 1: 'c6ffff8c',
+    2: 'c5ffff99', 3: 'c4ffffa5', 4: 'c3ffffb2', 5: 'c3ffffbf', 6: 'c2ffffcc', 7: 'c1ffffd8', 8: 'c0ffffe5',
+    9: 'bffffff2', 10: 'bfffffff', 11: 'b8f8ffff', 12: 'b2f2ffff', 13: 'abebffff', 14: 'a5e5ffff', 15: '9fdfffff',
+    16: '98d8ffff', 17: '92d2ffff', 18: '8bcbffff', 19: '85c5ffff', 20: '7fbfffff', 21: '78b8ffff', 22: '72b2ffff',
+    23: '6babffff', 24: '65a5ffff', 25: '5f9fffff', 26: '5b9bffff', 27: '5898ffff', 28: '5595ffff', 29: '5292ffff',
+    30: '4f8fffff', 31: '4b8bffff', 32: '4888ffff', 33: '4585ffff', 34: '4282ffff', 35: '3f7fffff', 36: '3b7bffff',
+    37: '3878ffff', 38: '3575ffff', 39: '3272ffff', 40: '2f6fffff', 41: '2b6bffff', 42: '2868ffff', 43: '2565ffff',
+    44: '2262ffff', 45: '1f5fffff', 46: '1b5bffff', 47: '1858ffff', 48: '1555ffff', 49: '1252ffff', 50: '0f4fffff',
+    51: '0c4bffff', 52: '0948ffff', 53: '0645ffff', 54: '0242ffff', 55: '003fffff', 56: '003bffff', 57: '0038ffff',
+    58: '0035ffff', 59: '0032ffff', 60: '002fffff', 65: '001fffff', 70: '000fffff', 75: '0000ffff',
+  };
+  return Object.entries(hex).map(([dbz, h]) => [Number(dbz), ...[0, 2, 4, 6].map((i) => parseInt(h.slice(i, i + 2), 16))]);
+})();
+
+function corParaDbz(r, g, b, a) {
+  if (a < 8) return null; // transparente = sem eco de radar
+  let melhor = null, menor = Infinity;
+  for (const [dbz, cr, cg, cb, ca] of RADAR_CORES) {
+    const d = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2 + (a - ca) ** 2;
+    if (d < menor) { menor = d; melhor = dbz; }
+  }
+  return melhor;
+}
+
+/** Posição da lagoa no mapa (tile x/y e pixel dentro do tile de 256 px) */
+function posicaoNoMapa(lat, lon, z) {
+  const n = 2 ** z;
+  const x = ((lon + 180) / 360) * n;
+  const latRad = (lat * Math.PI) / 180;
+  const y = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+  const tx = Math.floor(x), ty = Math.floor(y);
+  return { tx, ty, px: Math.floor((x - tx) * 256), py: Math.floor((y - ty) * 256) };
+}
+
+async function buscarRadar() {
+  try {
+    const meta = await (await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-store' })).json();
+    const quadros = meta?.radar?.past;
+    if (!quadros?.length) return null;
+    const ultimo = quadros[quadros.length - 1];
+    const idadeMin = Math.round((Date.now() / 1000 - ultimo.time) / 60);
+    if (idadeMin > RADAR_MAX_ATRASO_MIN) return null;
+
+    const { tx, ty, px, py } = posicaoNoMapa(LOCAL.latitude, LOCAL.longitude, RADAR_ZOOM);
+    const url = `${meta.host}${ultimo.path}/256/${RADAR_ZOOM}/${tx}/${ty}/2/0_0.png`;
+    const blob = await (await fetch(url)).blob();
+    const img = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+
+    let maxDbz = null;
+    for (let dy = -RADAR_RAIO_PX; dy <= RADAR_RAIO_PX; dy++) {
+      for (let dx = -RADAR_RAIO_PX; dx <= RADAR_RAIO_PX; dx++) {
+        const x = Math.min(255, Math.max(0, px + dx)), y = Math.min(255, Math.max(0, py + dy));
+        const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
+        const dbz = corParaDbz(r, g, b, a);
+        if (dbz != null && (maxDbz == null || dbz > maxDbz)) maxDbz = dbz;
+      }
+    }
+    console.log('Radar RainViewer:', { dbz: maxDbz, idadeMin });
+    return { dbz: maxDbz, idadeMin };
+  } catch (e) {
+    console.warn('Radar indisponível, usando só a previsão:', e);
+    return null;
+  }
+}
+
 async function buscarDados() {
-  const [previsao, satelite] = await Promise.all([buscarPrevisao(), buscarSatelite()]);
-  return { ...previsao, satelite };
+  const [previsao, satelite, radar] = await Promise.all([buscarPrevisao(), buscarSatelite(), buscarRadar()]);
+  return { ...previsao, satelite, radarDbz: radar?.dbz ?? null };
 }
 
 /** Modo demonstração: ?demo&vel=25&raj=30&dir=45&cod=2 */
@@ -210,6 +296,8 @@ function lerDemo() {
     nuvensMedias: q.has('medias') ? Number(q.get('medias')) : undefined,
     // &k=0.5 simula a medição do satélite (índice de claridade)
     satelite: q.has('k') ? { ghi: Number(q.get('k')) * 1000, toa: 1000, idadeMin: 20 } : null,
+    // &radar=35 simula a refletividade do radar em dBZ (≥ 20 = chuva)
+    radarDbz: q.has('radar') ? Number(q.get('radar')) : null,
   };
 }
 
