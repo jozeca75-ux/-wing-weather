@@ -41,6 +41,7 @@ const CHUVA_MIN_MM = 0.3;
  */
 const K_ENSOLARADO = 0.62;      // k ≥ 0,62 → ENSOLARADO
 const K_NUBLADO = 0.30;         // k < 0,30 → NUBLADO (entre os dois → NUVEM COM SOL)
+const K_CHUVA = 0.18;           // k < 0,18 (céu muito escuro) + previsão de qualquer chuva → CHUVA
 const SOL_MIN_TOA = 150;        // W/m²; abaixo disso (noite ou sol muito baixo) usa a previsão
 const SAT_MAX_ATRASO_MIN = 90;  // dado de satélite mais velho que isso é ignorado
 
@@ -73,14 +74,31 @@ function ceuSemChuva(p) {
 }
 
 /**
+ * Satélite vê o céu MUITO escuro (de dia, medição recente)?
+ * Nuvens de chuva bloqueiam muito mais luz que um céu só nublado.
+ */
+function ceuMuitoEscuro(sat) {
+  if (!sat || sat.toa < SOL_MIN_TOA || sat.idadeMin > SAT_MAX_ATRASO_MIN) return false;
+  return sat.ghi / sat.toa < K_CHUVA;
+}
+
+/** A previsão indica alguma chuva, mesmo fraca (garoa, chuva, pancadas ou volume > 0)? */
+function previsaoTemChuva(p) {
+  return (p.codigo >= 51 && p.codigo <= 82) || (p.precipitacao ?? 0) > 0;
+}
+
+/**
  * Código final do céu:
- * - trovoada (95-99) e neblina (45/48) vêm da previsão e são mantidas;
- * - chuva (61-82) só vira CHUVA com 0,5 mm ou mais previstos;
- * - garoa (51-57) e céu sem chuva (0-3): satélite (de dia) ou nuvens baixas/médias (à noite).
+ * 1. trovoada (95-99) → CHUVA (sempre);
+ * 2. satélite com céu muito escuro (k < 0,18) + previsão de qualquer chuva → CHUVA;
+ * 3. neblina (45/48) → mantida;
+ * 4. chuva da previsão (61-82) com ≥ 0,3 mm em 15 min → CHUVA;
+ * 5. resto: satélite (de dia) ou nuvens baixas/médias (à noite).
  */
 function codigoEfetivo(p) {
   const c = p.codigo;
   if (c >= 95) return c;
+  if (ceuMuitoEscuro(p.satelite) && previsaoTemChuva(p)) return 63;
   if (c === 45 || c === 48) return c;
   if (c >= 61 && !(p.precipitacao !== undefined && p.precipitacao < CHUVA_MIN_MM)) return c;
   return ceuSemChuva(p);
