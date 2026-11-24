@@ -106,7 +106,7 @@ body.sigla-oculta .sigla { opacity: 0; }
   transition: transform 1s ease;
 }
 
-/* Créditos das fontes de dados (exigidos por Open-Meteo e RainViewer) */
+/* Crédito da fonte de dados (exigido pela Open-Meteo) */
 .creditos {
   position: absolute;
   left: 20px;
