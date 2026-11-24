@@ -229,7 +229,7 @@ function mostrar(p) {
 
   // Velocidade
   document.getElementById('texto-velocidade').textContent =
-    `VELOCIDADE= ${Math.round(p.velocidade)} nós`;
+    `VELOCIDADE= ${Math.round(p.velocidade)} NÓS`;
 
   // Condição: vale o pior entre vento e céu
   const nivel = NIVEIS[Math.max(nivelVento(p.velocidade, p.rajada), nivelCeu(codigo))];
